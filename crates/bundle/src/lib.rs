@@ -12,7 +12,11 @@ pub mod bundle_capnp {
 pub mod revocation;
 pub mod access;
 pub mod grant;
+pub mod simulator;
 
 pub use revocation::{RevocationGuard, RevocationHandle};
 pub use access::{BundleAccessServer, BundleSimulator, BlockWindowGuard, BundleSpec, SimResult};
 pub use grant::BundleGrantBuilder;
+
+#[cfg(feature = "eth-call")]
+pub use simulator::EthCallSimulator;
