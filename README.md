@@ -1,61 +1,34 @@
 # membrane
 
-Capability-based access control over Cap'n Proto RPC, anchored to on-chain epoch state.
+Epoch-scoped capability primitives over Cap'n Proto RPC, anchored to on-chain state.
 
 ## What
 
-A Rust workspace providing epoch-scoped capability primitives for Ethereum block building. A searcher grants a builder time-bounded, scoped access to simulate a transaction bundle -- without a trusted intermediary.
+Generic building blocks for capability-based access control in systems where capabilities are scoped to an on-chain epoch. Owns the canonical `stem.capnp` schema and provides:
 
-Two crates:
-
-- **`membrane-core`** -- generic primitives: `Epoch`, `EpochGuard`, `MembraneServer`, `SessionExtensionBuilder`. Owns the canonical `stem.capnp` schema.
-- **`membrane-bundle`** -- bundle-specific access control: `BundleAccessServer`, `RevocationGuard`, `BundleGrantBuilder`, and `EthCallSimulator` (behind `eth-call` feature).
+- **`Epoch`** -- monotonic sequence number anchored to on-chain state
+- **`EpochGuard`** -- checks whether a capability's epoch is still current
+- **`MembraneServer`** -- generic server that issues epoch-scoped sessions via `graft()`
+- **`SessionExtensionBuilder`** -- trait for injecting domain-specific capabilities into sessions
 
 ## Why
 
-Searchers currently hand bundles to builders through Flashbots -- a trusted third party that can see, censor, or exploit metadata. This replaces that trust with a capability object issued directly to a specific builder, scoped to a block window, revocable without coordination.
-
-Cap'n Proto RPC is ideal: capabilities can be invalidated without resetting the connection. A single long-lived TCP session hosts multiple capability lifecycles with zero reconnection overhead.
+Cap'n Proto RPC capabilities can be invalidated without resetting the connection. A single long-lived TCP session hosts multiple capability lifecycles with zero reconnection overhead. This crate provides the epoch-scoped foundation that domain-specific capability systems build on.
 
 ## Schema
 
-`stem.capnp` defines the generic `Membrane(SessionExt)` interface and `Session(Extension)` struct. `bundle.capnp` defines `BundleGrant` (a session extension) and `BundleAccess` (simulate + include).
-
-Every `BundleAccess` call is triple-guarded:
-1. **EpochGuard** -- is the session epoch still current?
-2. **RevocationGuard** -- has the searcher revoked?
-3. **BlockWindowGuard** -- is the target block in `[validFrom, validUntil]`?
-
-## Layout
-
-```
-capnp/
-  stem.capnp          # canonical schema (Epoch, Session, Membrane)
-  bundle.capnp         # BundleGrant, BundleAccess, SimResult
-crates/
-  core/                # membrane-core: generic epoch-scoped primitives
-  bundle/              # membrane-bundle: bundle access control
-```
+`stem.capnp` defines `Membrane(SessionExt)`, `Session(Extension)`, `Epoch`, and `StatusPoller`. The `Session` struct is generic -- domain-specific capabilities go in the `Extension` field via `SessionExtensionBuilder`.
 
 ## Usage
 
 ```toml
-# Generic membrane primitives only
 [dependencies]
 membrane-core = { git = "https://github.com/wetware/membrane.git" }
-
-# Bundle access control (includes core)
-[dependencies]
-membrane-bundle = { git = "https://github.com/wetware/membrane.git" }
-
-# With real eth_call simulation
-[dependencies]
-membrane-bundle = { git = "https://github.com/wetware/membrane.git", features = ["eth-call"] }
 ```
 
 ## Cross-crate schema sharing
 
-Other crates that import `stem.capnp` should use `crate_provides` in their `build.rs` to reference `membrane-core`'s generated types instead of generating their own:
+Crates that import `stem.capnp` should use `crate_provides` to reference `membrane-core`'s generated types:
 
 ```rust
 capnpc::CompilerCommand::new()
